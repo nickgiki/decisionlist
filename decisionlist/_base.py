@@ -1,10 +1,11 @@
 import numpy as np
 from sklearn.tree import _tree
 
-def get_rules(tree, feature_names, class_names):
+
+def mine_tree_rules(tree, feature_names, class_names, sign_digits=3):
     """copied and modified from:
-        https://mljar.com/blog/extract-rules-decision-tree/
-        """
+    https://mljar.com/blog/extract-rules-decision-tree/
+    """
     tree_ = tree.tree_
     feature_name = [
         feature_names[i] if i != _tree.TREE_UNDEFINED else "undefined!"
@@ -13,44 +14,131 @@ def get_rules(tree, feature_names, class_names):
 
     paths = []
     path = []
-    
+
     def recurse(node, path, paths):
-        
+
         if tree_.feature[node] != _tree.TREE_UNDEFINED:
             name = feature_name[node]
             threshold = tree_.threshold[node]
             p1, p2 = list(path), list(path)
-            p1 += [f"({name} <= {np.round(threshold, 3)})"]
+            p1 += [f"({name} <= {np.round(threshold, sign_digits)})"]
             recurse(tree_.children_left[node], p1, paths)
-            p2 += [f"({name} > {np.round(threshold, 3)})"]
+            p2 += [f"({name} > {np.round(threshold, sign_digits)})"]
             recurse(tree_.children_right[node], p2, paths)
         else:
             path += [(tree_.value[node], tree_.n_node_samples[node])]
             paths += [path]
-            
+
     recurse(0, path, paths)
 
     # sort by samples count
     samples_count = [p[-1][1] for p in paths]
     ii = list(np.argsort(samples_count))
     paths = [paths[i] for i in reversed(ii)]
-    
+
     rules = []
     for path in paths:
-        rule = "if "
-        
+        rule_list = []
+        rule = []
         for p in path[:-1]:
-            if rule != "if ":
-                rule += " and "
-            rule += str(p)
-        rule += " then "
+            rule += [str(p)]
+        rule_list += [tuple(rule)]
+
         if class_names is None:
-            rule += "response: "+str(np.round(path[-1][0][0][0],3))
+            # classification
+            rule_list += [str(np.round(path[-1][0][0][0], 3))]  # class
         else:
+            # regression
             classes = path[-1][0][0]
             l = np.argmax(classes)
-            rule += f"class: {class_names[l]} (proba: {np.round(100.0*classes[l]/np.sum(classes),2)}%)"
-        rule += f" | based on {path[-1][1]:,} samples"
-        rules += [rule]
-        
+            rule_list += [
+                np.round(classes[l] / np.sum(classes), sign_digits)
+            ]  # confidence
+        rule_list += [path[-1][1]]  # support
+        rules += [tuple(rule_list)]
+
     return rules
+
+
+def beautify_rules(rules, one_hot_encoder):
+    """Beautifies and makes rules more concise"""
+    rules_c = []
+
+    # if a numerical feature is used twice with the same inequality operator merge
+    for i in range(len(rules)):
+        rule = rules[i]
+        features = [
+            r.split("<=")[0].replace("(", "").strip()
+            if "<" in r
+            else r.split(">")[0].replace("(", "").strip()
+            for r in rule[0]
+        ]
+        inequalities = ["<=" if "<" in r else ">" for r in rule[0]]
+        values = [
+            r.split("<=")[1].replace(")", "").strip()
+            if "<" in r
+            else r.split(">")[1].replace(")", "").strip()
+            for r in rule[0]
+        ]
+        conditions_array = np.array([features, inequalities, values]).T
+
+        unique_features = np.unique(features, return_counts=True)
+
+        if unique_features[1].max() > 1:
+            redundant_indices = []
+            for feature in unique_features[0][unique_features[1] > 1]:
+                conditions_filtered = conditions_array[
+                    conditions_array[:, 0] == feature
+                ]
+                unique_ineq = np.unique(conditions_filtered[:, 1], return_counts=True)
+                if unique_ineq[1].max() > 1:
+                    for ineq in unique_ineq[0][unique_ineq[1] > 1]:
+                        if ineq == ">":
+
+                            max_val = (
+                                conditions_filtered[
+                                    conditions_filtered[:, 1] == ineq, 2
+                                ]
+                                .astype(int)
+                                .max()
+                            )
+
+                            redundant_indices += np.where(
+                                (conditions_array[:, 0] == feature)
+                                & (conditions_array[:, 1] == ineq)
+                                & (conditions_array[:, 2].astype(int) < max_val)
+                            )[0].tolist()
+                        
+                        else:
+                            min_val = (
+                                conditions_filtered[
+                                    conditions_filtered[:, 1] == ineq, 2
+                                ]
+                                .astype(int)
+                                .min()
+                            )
+
+                            redundant_indices += np.where(
+                                (conditions_array[:, 0] == feature)
+                                & (conditions_array[:, 1] == ineq)
+                                & (conditions_array[:, 2].astype(int) > min_val)
+                            )[0].tolist()
+
+
+            rules_c += [
+                tuple(
+                    [
+                        tuple(
+                            rules[i][0][j]
+                            for j in range(len(rules[i][0]))
+                            if j not in redundant_indices
+                        ),
+                        rules[i][1],
+                        rules[i][2],
+                    ]
+                )
+            ]
+
+        else:
+            rules_c += [rule]
+    return rules_c
