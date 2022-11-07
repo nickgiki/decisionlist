@@ -163,6 +163,8 @@ def beautify_rules(rules, one_hot_encoder):
                         ),
                         rules[i][1],
                         rules[i][2],
+                        rules[i][3],
+                        rules[i][4]
                     ]
                 )
             ]
@@ -176,14 +178,15 @@ def get_rules_from_forest(forest, min_confidence, min_support, beautify=True):
     """extracts rules from a random forest"""
     all_rules = []
 
-    for i in range(len(forest.estimators_)):
+    for dt in forest.estimators_:
         if beautify:
-            all_rules += beautify_rules(mine_tree_rules(forest.estimators_[i]), None)
+            all_rules += beautify_rules(mine_tree_rules(dt), None)
 
         else:
-            all_rules += mine_tree_rules(forest.estimators_[i], None, forest.classes_)
-    # return [r for r in all_rules if r[-2] >= min_confidence and r[-1] >= min_support]
-    return all_rules
+            all_rules += mine_tree_rules(dt)
+    return [r for r in all_rules if r[-2] >=min_confidence and r[-1] >= min_support]
+    # return all_rules
+
 
 
 def sort_rules(rules):
@@ -191,9 +194,11 @@ def sort_rules(rules):
     rule_array = np.array(
         [[i, rules[i][-2], rules[i][-1], len(rules[i][0])] for i in range(len(rules))]
     )
+    
+    print(rule_array[:3,:])
 
-    # sort by confidence then support
+    # sort by confidence, support and rule length
     sorted_idx = rule_array[
-        np.lexsort((rule_array[:, 1], rule_array[:, 2], rule_array[:, 3]))[::-1]
+        np.lexsort((rule_array[:, 1], rule_array[:, 2], -rule_array[:, 3]))[::-1]
     ][:, 0].astype(int)
     return [rules[i] for i in sorted_idx]
