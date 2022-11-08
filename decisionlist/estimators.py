@@ -166,7 +166,7 @@ class DecisionListClassifier(DecisionListBase):
                 max_depth=self.max_rule_length,
                 n_estimators=self.num_trees,
                 max_features=self.max_features_per_split,
-                bootstrap=False,
+                bootstrap=True,
             )
 
             rf.fit(X_train_remaining, y_train_remaining)
