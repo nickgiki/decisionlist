@@ -1,6 +1,7 @@
 import numpy as np
 from sklearn.tree import _tree
 from sklearn.tree._classes import DecisionTreeClassifier, DecisionTreeRegressor
+from sklearn.ensemble import RandomForestClassifier
 
 
 def is_numeric(vector: np.ndarray):
@@ -44,16 +45,16 @@ def mine_tree_rules(tree, feature_names=None, class_names=None, sign_digits=3):
             p2 += [f"({name} > {np.round(threshold, sign_digits)})"]
             recurse(tree_.children_right[node], p2, paths)
         else:
-            
+
             if isinstance(tree, DecisionTreeRegressor):
                 path += [
-                        (
-                            tree_.value[node],
-                            tree_.impurity[node],
-                            tree_.n_node_samples[node],
-                        )
+                    (
+                        tree_.value[node],
+                        tree_.impurity[node],
+                        tree_.n_node_samples[node],
+                    )
                 ]
-                                
+
             else:
                 path += [(tree_.value[node], tree_.n_node_samples[node])]
             paths += [path]
@@ -75,13 +76,11 @@ def mine_tree_rules(tree, feature_names=None, class_names=None, sign_digits=3):
 
         if isinstance(tree, DecisionTreeRegressor):
             # regression
+
             rule_list += [np.round(path[-1][0][0][0], 3)]  # value
             rule_list += [
-                np.abs(
-                    
-                        (path[-1][-2] ** (0.5) + 0.001) / (rule_list[-1] + 0.001)
-                )
-            ]  # scaled abs rmse
+                0 if path[-1][-1] <= 1 else round(path[-1][-2] ** (0.5), 3)
+            ]  # rmse
         else:
             # classification
 
@@ -175,7 +174,6 @@ def make_rules_concise(rules, one_hot_encoder):
                             )[0].tolist()
 
             rules_c += [
-                
                 tuple(
                     [
                         tuple(
@@ -187,27 +185,26 @@ def make_rules_concise(rules, one_hot_encoder):
                         rules[i][2],
                         rules[i][3],
                         rules[i][4],
-                    ] if len(rules[i])==5 else                     [
-                    tuple(
-                        rules[i][0][j]
-                        for j in range(len(rules[i][0]))
-                        if j not in redundant_indices
-                    ),
-                    rules[i][1],
-                    rules[i][2],
-                    rules[i][3],
-                ] 
-) 
+                    ]
+                    if len(rules[i]) == 5
+                    else [
+                        tuple(
+                            rules[i][0][j]
+                            for j in range(len(rules[i][0]))
+                            if j not in redundant_indices
+                        ),
+                        rules[i][1],
+                        rules[i][2],
+                        rules[i][3],
+                    ]
+                )
             ]
 
         else:
             rules_c += [rule]
-    
-    #return unique
+
+    # return unique
     return [rules_c[i] for i in range(len(rules_c)) if rules_c[i] not in rules_c[:i]]
-
-
-
 
     # if a numerical feature is used twice with the same inequality operator merge
     for i in range(len(rules)):
@@ -280,7 +277,6 @@ def make_rules_concise(rules, one_hot_encoder):
                             )[0].tolist()
 
             rules_c += [
-                
                 tuple(
                     [
                         tuple(
@@ -293,13 +289,13 @@ def make_rules_concise(rules, one_hot_encoder):
                         rules[i][3],
                         rules[i][4],
                     ]
-                ) 
+                )
             ]
 
         else:
             rules_c += [rule]
-    
-    #return unique
+
+    # return unique
     return [rules_c[i] for i in range(len(rules_c)) if rules_c[i] not in rules_c[:i]]
 
 
@@ -317,34 +313,39 @@ def get_rules_from_forest(
 
         else:
             all_rules += mine_tree_rules(dt)
-    
-        return [
-            r for r in all_rules if (r[-2] >= min_confidence) and (r[-1] >= min_support)
+
+        if isinstance(forest, RandomForestClassifier):
+
+            return [
+                r
+                for r in all_rules
+                if (r[-2] >= min_confidence) and (r[-1] >= min_support)
             ]
+        else:
+            return [r for r in all_rules if (r[-1] >= min_support)]
 
 
-def sort_rules(rules):
+def sort_rules(rules, mode="classification"):
     """Sorts rules by confidence then support"""
-    
+
     rule_array = np.array(
         [[i, rules[i][-2], rules[i][-1], len(rules[i][0])] for i in range(len(rules))]
     )
 
-    
-    if len(rules[0])>3: 
-        #classification
+    if mode == "classification":
+        # classification
 
         # sort by confidence, support and rule length
         sorted_idx = rule_array[
             np.lexsort((rule_array[:, 1], rule_array[:, 2], -rule_array[:, 3]))[::-1]
         ][:, 0].astype(int)
     else:
-    
+
         # sort by support and rule length
         sorted_idx = rule_array[
-            np.lexsort((-rule_array[:, 1],rule_array[:, 2], -rule_array[:, 3]))[::-1]
+            np.lexsort((-rule_array[:, 1], rule_array[:, 2], -rule_array[:, 3]))[::-1]
         ][:, 0].astype(int)
-        
+
     return [rules[i] for i in sorted_idx]
 
 

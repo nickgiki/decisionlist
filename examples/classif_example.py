@@ -32,10 +32,10 @@ dtc_score = []
 for i in range(50):
     X, y = make_classification(1000)
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.25)
-    
+
     dlc_score.append(score_dlc(X_train, X_test, y_train, y_test))
     dtc_score.append(score_dtc(X_train, X_test, y_train, y_test))
 
 print(sum([dlc_score[i] >= dtc_score[i] for i in range(len(dlc_score))]))
 
-plt.hist([dlc_score[i]/dtc_score[i]-1 for i in range(len(dlc_score))])
+plt.hist([dlc_score[i] / dtc_score[i] - 1 for i in range(len(dlc_score))])

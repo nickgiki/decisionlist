@@ -13,7 +13,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 
-X, y = make_classification(1000,n_features=10)
+X, y = make_classification(1000, n_features=10)
 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.25)
 
 results = []
@@ -25,12 +25,12 @@ for i in range(50):
     # fit the dl classifier
     dlc = DecisionListClassifier()
     dlc.fit(X_train, y_train)
-    
+
     # fit the regressor
     dtc = DecisionTreeClassifier()
     dtc.fit(X_train, y_train)
-    
-    results += [dlc.score(X_test,y_test)/dtc.score(X_test,y_test)-1]
-    
+
+    results += [dlc.score(X_test, y_test) / dtc.score(X_test, y_test) - 1]
+
 plt.hist(results)
-plt.title('DecisionList improvement over DecisionTree')
+plt.title("DecisionList improvement over DecisionTree")

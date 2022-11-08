@@ -117,7 +117,6 @@ class DecisionListBase:
         else:
             X_test_t = X_test.copy()
 
-
         return X_test_t.astype(float)
 
     def _prepredict_y(self, y_test):
@@ -283,19 +282,19 @@ class DecisionListRegressor(DecisionListBase):
         """Fit the regressor"""
 
         X_train_t = self._prefit_X(X_train)
-        
+
         y_train_t = y_train.copy()
-        
+
         self._min_support_n = max(round(1.0 * self.min_support * X_train.shape[0]), 1)
-        
+
         self.rules = []
-        
+
         i_ = 0
-        
+
         X_train_remaining, y_train_remaining = X_train_t, y_train_t
         # sequential covering
         while True:
-        
+
             # train forest
             rf = RandomForestRegressor(
                 max_depth=self.max_rule_length,
@@ -303,9 +302,9 @@ class DecisionListRegressor(DecisionListBase):
                 max_features=self.max_features_per_split,
                 bootstrap=True,
             )
-        
+
             rf.fit(X_train_remaining, y_train_remaining)
-        
+
             # extract rules from the forest
             forest_rules = get_rules_from_forest(
                 rf,
@@ -313,7 +312,7 @@ class DecisionListRegressor(DecisionListBase):
                 min_support=self._min_support_n,
                 concise=True,
             )
-        
+
             if len(forest_rules) == 0:
                 # if no rule was found
                 if i_ == 0:
@@ -324,31 +323,31 @@ class DecisionListRegressor(DecisionListBase):
                     y_hat = y_train_remaining.mean()
                     support = X_train_remaining.shape[0]
                     self.rules += [(("__else",), y_hat, support)]
-        
+
                     break
-        
+
             else:
-                sorted_rules = sort_rules(forest_rules)
+                sorted_rules = sort_rules(forest_rules, "regression")
                 best_rule = sorted_rules[0]
                 num_rules = get_num_rules(best_rule)
-        
+
                 rule_ind = num_rule_ind(X_train_remaining, num_rules)
-        
+
                 self.rules += [best_rule]
-        
+
                 X_train_remaining, y_train_remaining = (
                     X_train_remaining[~rule_ind],
                     y_train_remaining[~rule_ind],
                 )
-        
+
             if X_train_remaining.shape[0] == 0:
                 # if no more data stop
                 break
-        
+
             rf = None
-        
+
             i_ += 1
-        
+
         self.is_fitted = True
 
     def predict(self, X_test):
