@@ -44,7 +44,7 @@ def mine_tree_rules(tree, feature_names=None, class_names=None, sign_digits=3):
             p2 += [f"({name} > {np.round(threshold, sign_digits)})"]
             recurse(tree_.children_right[node], p2, paths)
         else:
-            print(tree_.value[node],tree_.impurity[node],tree_.n_node_samples[node])
+            
             if isinstance(tree, DecisionTreeRegressor):
                 path += [
                         (
