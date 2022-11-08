@@ -16,22 +16,40 @@ class DecisionListBase:
 
     def __init__(
         self,
-        max_rule_length=2,
-        min_confidence=0.8,
-        min_support=0.05,
+        max_rule_length=3,
+        min_confidence=0.85,
+        min_support=0.025,
         num_trees=20,
         max_features_per_split=0.2,
         sign_digits=3,
     ):
-        """Initializes the classifier"""
+        """Initializes the estimator"""
         self.max_rule_length = max_rule_length
         self.min_confidence = min_confidence
         self.min_support = min_support
         self.num_trees = num_trees
         self.max_features_per_split = max_features_per_split
         self.sign_digits = sign_digits
+        self.is_fitted = False
 
         self._validate_params()
+        self.is_fitted = False
+
+    def get_params(self, deep=True):
+        # suppose this estimator has parameters "alpha" and "recursive"
+        return {
+            "max_rule_length": self.max_rule_length,
+            "min_confidence": self.min_confidence,
+            "min_support": self.min_support,
+            "num_trees": self.num_trees,
+            "max_features_per_split": self.max_features_per_split,
+            "sign_digits": self.sign_digits,
+        }
+
+    def set_params(self, **parameters):
+        for parameter, value in parameters.items():
+            setattr(self, parameter, value)
+        return self
 
     def _validate_params(self):
         """Validates parameters upon initiation"""
@@ -87,7 +105,36 @@ class DecisionListBase:
         else:
             y_train_t = y_train.copy()
 
+        self.n_classes = np.unique(y_train).size
+
         return y_train_t.astype(float)
+
+    def _prepredict_X(self, X_test):
+        """Preprocesses X before test"""
+        cat_cols = np.array(
+            [i for i in range(X_test.shape[1]) if not is_numeric(X_test[:, i])]
+        )
+
+        if cat_cols.size > 0:
+            X_test_t = self.oh_encoder.transform(X_test)
+        else:
+            X_test_t = X_test.copy()
+
+        return X_test_t.astype(float)
+
+    def _prepredict_y(self, y_test):
+        """Intended for classifier only"""
+        if self.label_transformer is not None:
+            y_test_t = self.label_transformer.transform(y_test)
+        else:
+            y_test_t = y_test.copy()
+
+        return y_test_t.astype(float)
+
+    def _check_if_fitted(self):
+        """Checks whether is fitted"""
+        if not self.is_fitted:
+            raise Exception("The estimator has not been fitted")
 
 
 class DecisionListClassifier(DecisionListBase):
@@ -95,6 +142,7 @@ class DecisionListClassifier(DecisionListBase):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
+        self.label_transformer = None
 
     def fit(self, X_train, y_train):
         """Fit the classifier"""
@@ -118,7 +166,7 @@ class DecisionListClassifier(DecisionListBase):
                 max_depth=self.max_rule_length,
                 n_estimators=self.num_trees,
                 max_features=self.max_features_per_split,
-                warm_start=False,
+                bootstrap=False,
             )
 
             rf.fit(X_train_remaining, y_train_remaining)
@@ -175,15 +223,56 @@ class DecisionListClassifier(DecisionListBase):
 
     def predict(self, X_test):
         """Predicts labels for new samples"""
-        pass
+
+        self._check_if_fitted()
+        X_test_t = self._prepredict_X(X_test)
+
+        y_pred = np.repeat(np.nan, X_test_t.shape[0])
+        already_classified = np.repeat(False, X_test_t.shape[0])
+
+        for i in range(len(self.rules)):
+            rule = self.rules[i]
+            if rule[0][0] != "__else":
+                num_rules = get_num_rules(rule)
+                rule_ind = num_rule_ind(X_test_t, num_rules)
+                y_pred[(~already_classified) & (rule_ind)] = rule[1]
+                already_classified = np.where(
+                    (already_classified) | (rule_ind), True, False
+                )
+            else:
+                y_pred[(~already_classified)] = rule[1]
+        return y_pred
 
     def predict_proba(self, X_test):
         """Predicts probabilities for new samples"""
-        pass
+        self._check_if_fitted()
+        X_test_t = self._prepredict_X(X_test)
+
+        y_pred = np.repeat(np.nan, X_test_t.shape[0] * self.n_classes).reshape(
+            X_test_t.shape[0], self.n_classes
+        )
+        already_classified = np.repeat(False, X_test_t.shape[0])
+
+        for i in range(len(self.rules)):
+            rule = self.rules[i]
+            if rule[0][0] != "__else":
+                num_rules = get_num_rules(rule)
+                rule_ind = num_rule_ind(X_test_t, num_rules)
+                y_pred[(~already_classified) & (rule_ind)] = np.array(rule[2]) / sum(
+                    rule[2]
+                )
+                already_classified = np.where(
+                    (already_classified) | (rule_ind), True, False
+                )
+            else:
+                y_pred[(~already_classified)] = np.array(rule[2]) / sum(rule[2])
+        return y_pred
 
     def score(self, X_test, y_test):
         """Returns the accuracy for new X, y data"""
-        pass
+        y_pred = self.predict(X_test)
+        y_test_t = self._prepredict_y(y_test)
+        return (y_pred == y_test_t).sum() / y_test.size
 
 
 class DecisionListRegressor(DecisionListBase):
