@@ -44,7 +44,18 @@ def mine_tree_rules(tree, feature_names=None, class_names=None, sign_digits=3):
             p2 += [f"({name} > {np.round(threshold, sign_digits)})"]
             recurse(tree_.children_right[node], p2, paths)
         else:
-            path += [(tree_.value[node], tree_.n_node_samples[node])]
+            print(tree_.value[node],tree_.impurity[node],tree_.n_node_samples[node])
+            if isinstance(tree, DecisionTreeRegressor):
+                path += [
+                        (
+                            tree_.value[node],
+                            tree_.impurity[node],
+                            tree_.n_node_samples[node],
+                        )
+                ]
+                                
+            else:
+                path += [(tree_.value[node], tree_.n_node_samples[node])]
             paths += [path]
 
     recurse(0, path, paths)
@@ -64,7 +75,13 @@ def mine_tree_rules(tree, feature_names=None, class_names=None, sign_digits=3):
 
         if isinstance(tree, DecisionTreeRegressor):
             # regression
-            rule_list += [np.round(path[-1][0][0][0], 3)]  # class
+            rule_list += [np.round(path[-1][0][0][0], 3)]  # value
+            rule_list += [
+                np.abs(
+                    
+                        (path[-1][-2] ** (0.5) + 0.001) / (rule_list[-1] + 0.001)
+                )
+            ]  # scaled abs rmse
         else:
             # classification
 
@@ -76,7 +93,7 @@ def mine_tree_rules(tree, feature_names=None, class_names=None, sign_digits=3):
             rule_list += [
                 np.round(1.0 * class_counts[l] / np.sum(class_counts), sign_digits)
             ]  # confidence
-        rule_list += [path[-1][1]]  # support
+        rule_list += [path[-1][-1]]  # support
         rules += [tuple(rule_list)]
 
     return rules
@@ -170,19 +187,17 @@ def make_rules_concise(rules, one_hot_encoder):
                         rules[i][2],
                         rules[i][3],
                         rules[i][4],
-                    ]
-                ) if len(rules[i])>3 else 
-                tuple(
-                    [
-                        tuple(
-                            rules[i][0][j]
-                            for j in range(len(rules[i][0]))
-                            if j not in redundant_indices
-                        ),
-                        rules[i][1],
-                        rules[i][2],
-                    ]
-                )
+                    ] if len(rules[i])==5 else                     [
+                    tuple(
+                        rules[i][0][j]
+                        for j in range(len(rules[i][0]))
+                        if j not in redundant_indices
+                    ),
+                    rules[i][1],
+                    rules[i][2],
+                    rules[i][3],
+                ] 
+) 
             ]
 
         else:
@@ -192,7 +207,103 @@ def make_rules_concise(rules, one_hot_encoder):
     return [rules_c[i] for i in range(len(rules_c)) if rules_c[i] not in rules_c[:i]]
 
 
-def get_rules_from_forest(
+
+
+    # if a numerical feature is used twice with the same inequality operator merge
+    for i in range(len(rules)):
+        rule = rules[i]
+
+        # if rule is empty skip
+        if len(rule[0]) == 0:
+            continue
+
+        features = [
+            r.split("<=")[0].replace("(", "").strip()
+            if "<" in r
+            else r.split(">")[0].replace("(", "").strip()
+            for r in rule[0]
+        ]
+        inequalities = ["<=" if "<" in r else ">" for r in rule[0]]
+        values = [
+            r.split("<=")[1].replace(")", "").strip()
+            if "<" in r
+            else r.split(">")[1].replace(")", "").strip()
+            for r in rule[0]
+        ]
+        conditions_array = np.array([features, inequalities, values]).T
+
+        unique_features = np.unique(features, return_counts=True)
+
+        # if there are features that exist more than once in the rule conditions
+        if unique_features[1].max() > 1:
+            redundant_indices = []
+            for feature in unique_features[0][unique_features[1] > 1]:
+                conditions_filtered = conditions_array[
+                    conditions_array[:, 0] == feature
+                ]
+                unique_ineq = np.unique(conditions_filtered[:, 1], return_counts=True)
+
+                # if there are more than one occurences for an inequality
+                if unique_ineq[1].max() > 1:
+                    for ineq in unique_ineq[0][unique_ineq[1] > 1]:
+                        if ineq == ">":
+
+                            # keep only the maximum
+                            max_val = (
+                                conditions_filtered[
+                                    conditions_filtered[:, 1] == ineq, 2
+                                ]
+                                .astype(float)
+                                .max()
+                            )
+
+                            redundant_indices += np.where(
+                                (conditions_array[:, 0] == feature)
+                                & (conditions_array[:, 1] == ineq)
+                                & (conditions_array[:, 2].astype(float) < max_val)
+                            )[0].tolist()
+
+                        else:
+                            # keep only the minimum
+                            min_val = (
+                                conditions_filtered[
+                                    conditions_filtered[:, 1] == ineq, 2
+                                ]
+                                .astype(float)
+                                .min()
+                            )
+
+                            redundant_indices += np.where(
+                                (conditions_array[:, 0] == feature)
+                                & (conditions_array[:, 1] == ineq)
+                                & (conditions_array[:, 2].astype(float) > min_val)
+                            )[0].tolist()
+
+            rules_c += [
+                
+                tuple(
+                    [
+                        tuple(
+                            rules[i][0][j]
+                            for j in range(len(rules[i][0]))
+                            if j not in redundant_indices
+                        ),
+                        rules[i][1],
+                        rules[i][2],
+                        rules[i][3],
+                        rules[i][4],
+                    ]
+                ) 
+            ]
+
+        else:
+            rules_c += [rule]
+    
+    #return unique
+    return [rules_c[i] for i in range(len(rules_c)) if rules_c[i] not in rules_c[:i]]
+
+
+def get_rules_from_forest_c(
     forest, min_confidence, min_support, concise=True, sign_digits=3
 ):
     """extracts rules from a random forest"""
@@ -207,22 +318,12 @@ def get_rules_from_forest(
         else:
             all_rules += mine_tree_rules(dt)
     
-    # return all_rules
-    if len(all_rules[0])>3: 
-        #classification
-    
         return [
             r for r in all_rules if (r[-2] >= min_confidence) and (r[-1] >= min_support)
-               ]
-    else:
-        #regression
-        return [
-            r for r in all_rules if (r[-1] >= min_support)
-               ]
-        
+            ]
 
 
-def sort_rules(rules):
+def sort_rules_c(rules):
     """Sorts rules by confidence then support"""
     
     rule_array = np.array(
