@@ -83,14 +83,19 @@ def mine_tree_rules(tree, feature_names=None, class_names=None, sign_digits=3):
     return rules
 
 
-def beautify_rules(rules, one_hot_encoder):
+def make_rules_concise(rules, one_hot_encoder):
 
-    """Beautifies and makes rules more concise"""
+    """Makes rules more concise"""
     rules_c = []
 
     # if a numerical feature is used twice with the same inequality operator merge
     for i in range(len(rules)):
         rule = rules[i]
+
+        # if rule is empty skip
+        if len(rule[0]) == 0:
+            continue
+
         features = [
             r.split("<=")[0].replace("(", "").strip()
             if "<" in r
@@ -164,7 +169,7 @@ def beautify_rules(rules, one_hot_encoder):
                         rules[i][1],
                         rules[i][2],
                         rules[i][3],
-                        rules[i][4]
+                        rules[i][4],
                     ]
                 )
             ]
@@ -174,19 +179,24 @@ def beautify_rules(rules, one_hot_encoder):
     return rules_c
 
 
-def get_rules_from_forest(forest, min_confidence, min_support, beautify=True):
+def get_rules_from_forest(
+    forest, min_confidence, min_support, concise=True, sign_digits=3
+):
     """extracts rules from a random forest"""
     all_rules = []
 
     for dt in forest.estimators_:
-        if beautify:
-            all_rules += beautify_rules(mine_tree_rules(dt), None)
+        if concise:
+            all_rules += make_rules_concise(
+                mine_tree_rules(dt, sign_digits=sign_digits), None
+            )
 
         else:
             all_rules += mine_tree_rules(dt)
-    return [r for r in all_rules if r[-2] >=min_confidence and r[-1] >= min_support]
+    return [
+        r for r in all_rules if (r[-2] >= min_confidence) and (r[-1] >= min_support)
+    ]
     # return all_rules
-
 
 
 def sort_rules(rules):
@@ -194,11 +204,81 @@ def sort_rules(rules):
     rule_array = np.array(
         [[i, rules[i][-2], rules[i][-1], len(rules[i][0])] for i in range(len(rules))]
     )
-    
-    print(rule_array[:3,:])
 
     # sort by confidence, support and rule length
     sorted_idx = rule_array[
         np.lexsort((rule_array[:, 1], rule_array[:, 2], -rule_array[:, 3]))[::-1]
     ][:, 0].astype(int)
     return [rules[i] for i in sorted_idx]
+
+
+def get_num_rules(rule):
+    """Transform text rule to tuple,
+    1st element being col index, second binary (0 left), third threshold"""
+
+    n_rule = []
+    for r in rule[0]:
+        if "<=" in r:
+            spl = r.split("<=")
+            n_rule += [
+                (
+                    int(spl[0].replace("(__col", "").strip()),
+                    0,
+                    float(spl[1].replace(")", "").strip()),
+                )
+            ]
+        else:
+            spl = r.split(">")
+            n_rule += [
+                (
+                    int(spl[0].replace("(__col", "").strip()),
+                    1,
+                    float(spl[1].replace(")", "").strip()),
+                )
+            ]
+
+    return n_rule
+
+
+def num_rule_ind(X, rule):
+    """Filters data using num rule"""
+    rule_ind = None
+
+    for num_rule in rule:
+        if num_rule[1] == 0:
+            # if rule is less than or equal
+
+            if rule_ind is None:
+                # if it is the first rule
+
+                rule_ind = np.where(
+                    X[:, num_rule[0]] <= num_rule[2],
+                    True,
+                    False,
+                )
+            else:
+                # if there are more than 1 rules
+                rule_ind = (rule_ind) & (
+                    np.where(
+                        X[:, num_rule[0]] <= num_rule[2],
+                        True,
+                        False,
+                    )
+                )
+        else:
+            # if rule is greater than
+
+            if rule_ind is None:
+                # if it is the first rule
+                rule_ind = np.where(X[:, num_rule[0]] > num_rule[2], True, False)
+            else:
+                # if there are more than 1 rules
+                rule_ind = (rule_ind) & (
+                    np.where(
+                        X[:, num_rule[0]] > num_rule[2],
+                        True,
+                        False,
+                    )
+                )
+
+    return rule_ind
