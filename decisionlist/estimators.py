@@ -1,7 +1,7 @@
 from decisionlist._base import (
     is_numeric,
-    sort_rules_c,
-    get_rules_from_forest_c,
+    sort_rules,
+    get_rules_from_forest,
     get_num_rules,
     num_rule_ind,
 )
@@ -167,7 +167,7 @@ class DecisionListClassifier(DecisionListBase):
             rf.fit(X_train_remaining, y_train_remaining)
 
             # extract rules from the forest
-            forest_rules = get_rules_from_forest_c(
+            forest_rules = get_rules_from_forest(
                 rf,
                 min_confidence=self.min_confidence,
                 min_support=self._min_support_n,
@@ -304,7 +304,7 @@ class DecisionListRegressor(DecisionListBase):
             rf.fit(X_train_remaining, y_train_remaining)
         
             # extract rules from the forest
-            forest_rules = get_rules_from_forest_r(
+            forest_rules = get_rules_from_forest(
                 rf,
                 min_confidence=self.min_confidence,
                 min_support=self._min_support_n,
@@ -350,8 +350,27 @@ class DecisionListRegressor(DecisionListBase):
 
     def predict(self, X_test):
         """Predicts labels for new samples"""
-        pass
+        self._check_if_fitted()
+        X_test_t = self._prepredict_X(X_test)
+
+        y_pred = np.repeat(np.nan, X_test_t.shape[0])
+        already_classified = np.repeat(False, X_test_t.shape[0])
+
+        for i in range(len(self.rules)):
+            rule = self.rules[i]
+            if rule[0][0] != "__else":
+                num_rules = get_num_rules(rule)
+                rule_ind = num_rule_ind(X_test_t, num_rules)
+                y_pred[(~already_classified) & (rule_ind)] = rule[1]
+                already_classified = np.where(
+                    (already_classified) | (rule_ind), True, False
+                )
+            else:
+                y_pred[(~already_classified)] = rule[1]
+        return y_pred
 
     def score(self, X_test, y_test):
-        """Returns the accuracy for new X, y data"""
-        pass
+        """Returns the R^2 for new X, y data"""
+        self._check_if_fitted()
+        y_test_hat = self.predict(X_test)
+        return np.corrcoef(y_test, y_test_hat)[0, 1] ** 2

@@ -303,7 +303,7 @@ def make_rules_concise(rules, one_hot_encoder):
     return [rules_c[i] for i in range(len(rules_c)) if rules_c[i] not in rules_c[:i]]
 
 
-def get_rules_from_forest_c(
+def get_rules_from_forest(
     forest, min_confidence, min_support, concise=True, sign_digits=3
 ):
     """extracts rules from a random forest"""
@@ -323,7 +323,7 @@ def get_rules_from_forest_c(
             ]
 
 
-def sort_rules_c(rules):
+def sort_rules(rules):
     """Sorts rules by confidence then support"""
     
     rule_array = np.array(
@@ -339,14 +339,10 @@ def sort_rules_c(rules):
             np.lexsort((rule_array[:, 1], rule_array[:, 2], -rule_array[:, 3]))[::-1]
         ][:, 0].astype(int)
     else:
-        #regression
-        rule_array = np.array(
-            [[i, rules[i][-2], rules[i][-1], len(rules[i][0])] for i in range(len(rules))]
-        )
     
         # sort by support and rule length
         sorted_idx = rule_array[
-            np.lexsort((rule_array[:, 2], -rule_array[:, 3]))[::-1]
+            np.lexsort((-rule_array[:, 1],rule_array[:, 2], -rule_array[:, 3]))[::-1]
         ][:, 0].astype(int)
         
     return [rules[i] for i in sorted_idx]
