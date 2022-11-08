@@ -33,6 +33,7 @@ class DecisionListBase:
         self.is_fitted = False
 
         self._validate_params()
+        self.oh_encoder = None
         self.is_fitted = False
 
     def get_params(self, deep=True):
@@ -111,8 +112,10 @@ class DecisionListBase:
 
     def _prepredict_X(self, X_test):
         """Preprocesses X before test"""
-
-        X_test_t = self.oh_encoder.transform(X_test)
+        if self.oh_encoder is not None:
+            X_test_t = self.oh_encoder.transform(X_test)
+        else:
+            X_test_t = X_test.copy()
 
 
         return X_test_t.astype(float)
@@ -193,7 +196,7 @@ class DecisionListClassifier(DecisionListBase):
                     break
 
             else:
-                sorted_rules = sort_rules_c(forest_rules)
+                sorted_rules = sort_rules(forest_rules)
                 best_rule = sorted_rules[0]
                 num_rules = get_num_rules(best_rule)
 
