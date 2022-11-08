@@ -99,10 +99,115 @@ def mine_tree_rules(tree, feature_names=None, class_names=None, sign_digits=3):
     return rules
 
 
-def make_rules_concise_c(rules, one_hot_encoder):
+def make_rules_concise(rules, one_hot_encoder):
 
     """Makes rules more concise"""
     rules_c = []
+
+    # if a numerical feature is used twice with the same inequality operator merge
+    for i in range(len(rules)):
+        rule = rules[i]
+
+        # if rule is empty skip
+        if len(rule[0]) == 0:
+            continue
+
+        features = [
+            r.split("<=")[0].replace("(", "").strip()
+            if "<" in r
+            else r.split(">")[0].replace("(", "").strip()
+            for r in rule[0]
+        ]
+        inequalities = ["<=" if "<" in r else ">" for r in rule[0]]
+        values = [
+            r.split("<=")[1].replace(")", "").strip()
+            if "<" in r
+            else r.split(">")[1].replace(")", "").strip()
+            for r in rule[0]
+        ]
+        conditions_array = np.array([features, inequalities, values]).T
+
+        unique_features = np.unique(features, return_counts=True)
+
+        # if there are features that exist more than once in the rule conditions
+        if unique_features[1].max() > 1:
+            redundant_indices = []
+            for feature in unique_features[0][unique_features[1] > 1]:
+                conditions_filtered = conditions_array[
+                    conditions_array[:, 0] == feature
+                ]
+                unique_ineq = np.unique(conditions_filtered[:, 1], return_counts=True)
+
+                # if there are more than one occurences for an inequality
+                if unique_ineq[1].max() > 1:
+                    for ineq in unique_ineq[0][unique_ineq[1] > 1]:
+                        if ineq == ">":
+
+                            # keep only the maximum
+                            max_val = (
+                                conditions_filtered[
+                                    conditions_filtered[:, 1] == ineq, 2
+                                ]
+                                .astype(float)
+                                .max()
+                            )
+
+                            redundant_indices += np.where(
+                                (conditions_array[:, 0] == feature)
+                                & (conditions_array[:, 1] == ineq)
+                                & (conditions_array[:, 2].astype(float) < max_val)
+                            )[0].tolist()
+
+                        else:
+                            # keep only the minimum
+                            min_val = (
+                                conditions_filtered[
+                                    conditions_filtered[:, 1] == ineq, 2
+                                ]
+                                .astype(float)
+                                .min()
+                            )
+
+                            redundant_indices += np.where(
+                                (conditions_array[:, 0] == feature)
+                                & (conditions_array[:, 1] == ineq)
+                                & (conditions_array[:, 2].astype(float) > min_val)
+                            )[0].tolist()
+
+            rules_c += [
+                
+                tuple(
+                    [
+                        tuple(
+                            rules[i][0][j]
+                            for j in range(len(rules[i][0]))
+                            if j not in redundant_indices
+                        ),
+                        rules[i][1],
+                        rules[i][2],
+                        rules[i][3],
+                        rules[i][4],
+                    ] if len(rules[i])==5 else                     [
+                    tuple(
+                        rules[i][0][j]
+                        for j in range(len(rules[i][0]))
+                        if j not in redundant_indices
+                    ),
+                    rules[i][1],
+                    rules[i][2],
+                    rules[i][3],
+                ] 
+) 
+            ]
+
+        else:
+            rules_c += [rule]
+    
+    #return unique
+    return [rules_c[i] for i in range(len(rules_c)) if rules_c[i] not in rules_c[:i]]
+
+
+
 
     # if a numerical feature is used twice with the same inequality operator merge
     for i in range(len(rules)):
@@ -206,7 +311,7 @@ def get_rules_from_forest_c(
 
     for dt in forest.estimators_:
         if concise:
-            all_rules += make_rules_concise_c(
+            all_rules += make_rules_concise(
                 mine_tree_rules(dt, sign_digits=sign_digits), None
             )
 
