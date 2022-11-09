@@ -28,7 +28,7 @@ for i in range(50):
     dlr.fit(X_train, y_train)
 
     # fit the regressor
-    dtr = DecisionTreeRegressor(max_depth=2)
+    dtr = DecisionTreeRegressor()
     dtr.fit(X_train, y_train)
 
     results += [dlr.score(X_test, y_test) / dtr.score(X_test, y_test) - 1]
