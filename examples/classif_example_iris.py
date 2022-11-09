@@ -16,15 +16,20 @@ results = []
 
 # create data
 X, y = load_iris(return_X_y=True)
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.25)
 
-# fit the dl classifier
-dlc = DecisionListClassifier(min_support=0.02, min_confidence=0.75)
-dlc.fit(X_train, y_train)
+n_estimators = []
 
-# fit the regressor
-dtc = DecisionTreeClassifier()
-dtc.fit(X_train, y_train)
+for i in range(100):
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.33)
+    
+    # fit the dl classifier
+    dlc = DecisionListClassifier(min_support=0.01,max_features_per_split=0.85)
+    dlc.fit(X_train, y_train)
+    
+    # fit the regressor
+    dtc = DecisionTreeClassifier()
+    dtc.fit(X_train, y_train)
+    
+    results += [np.mean(round(dlc.score(X_test, y_test) / dtc.score(X_test, y_test) - 1, 3))]
 
-
-np.mean(round(dlc.score(X_test, y_test) / dtc.score(X_test, y_test) - 1, 3))
+np.quantile(results,q=[0.025,0.5,0.975])

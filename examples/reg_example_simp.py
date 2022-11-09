@@ -34,3 +34,4 @@ for i in range(50):
     results += [dlr.score(X_test, y_test) / dtr.score(X_test, y_test) - 1]
 
 plt.hist(results)
+np.median(results)
