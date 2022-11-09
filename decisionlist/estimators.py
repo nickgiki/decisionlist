@@ -22,6 +22,7 @@ class DecisionListBase:
         min_support=0.02,
         num_trees=20,
         max_features_per_split=0.5,
+        bootstrap = True,
         sign_digits=3,
     ):
         """Initializes the estimator"""
@@ -30,6 +31,7 @@ class DecisionListBase:
         self.min_support = min_support
         self.num_trees = num_trees
         self.max_features_per_split = max_features_per_split
+        self.bootstrap = bootstrap
         self.sign_digits = sign_digits
         self.is_fitted = False
 
@@ -165,7 +167,7 @@ class DecisionListClassifier(DecisionListBase):
                 max_depth=self.max_rule_length,
                 n_estimators=self.num_trees,
                 max_features=self.max_features_per_split,
-                bootstrap=False,
+                bootstrap=self.bootstrap,
             )
 
             rf.fit(X_train_remaining, y_train_remaining)
