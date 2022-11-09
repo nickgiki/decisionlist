@@ -427,3 +427,40 @@ def num_rule_ind(X, rule):
                 )
 
     return rule_ind
+
+
+def add_missing_classes(rules, actual_classes, reduced_classes):
+    """In the case of multi-class classification
+    repairs rules to include missing classes
+    to ensure sequential covering
+    """
+    
+    missing_classes = list(set(actual_classes).difference(set(reduced_classes)))
+
+    if len(missing_classes) > 0:
+        new_rules = []
+        for r in rules:
+            if len(r[-3]) < len(actual_classes):
+                classes = np.array(list(reduced_classes) + missing_classes)
+                idx = np.argsort(classes)
+                class_counts = np.array(
+                    list(r[-3]) + [0 for i in range(len(missing_classes))]
+                )
+
+                new_rules = [
+                    tuple(
+                        [
+                            r[0],
+                            class_counts[idx].argmax() * 1.0,
+                            class_counts[idx].tolist(),
+                            r[-2],
+                            r[-1],
+                        ]
+                    )
+                ]
+
+            else:
+                new_rules += [r]
+        return new_rules
+    
+    return rules

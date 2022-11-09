@@ -4,6 +4,7 @@ from decisionlist._base import (
     get_rules_from_forest,
     get_num_rules,
     num_rule_ind,
+    add_missing_classes,
 )
 from sklearn.preprocessing import OneHotEncoder, LabelEncoder
 from sklearn.ensemble import RandomForestClassifier, RandomForestRegressor
@@ -17,10 +18,10 @@ class DecisionListBase:
     def __init__(
         self,
         max_rule_length=2,
-        min_confidence=0.75,
-        min_support=0.04,
-        num_trees=25,
-        max_features_per_split=0.75,
+        min_confidence=0.7,
+        min_support=0.02,
+        num_trees=20,
+        max_features_per_split=0.5,
         sign_digits=3,
     ):
         """Initializes the estimator"""
@@ -37,7 +38,7 @@ class DecisionListBase:
         self.is_fitted = False
 
     def get_params(self, deep=True):
-        # suppose this estimator has parameters "alpha" and "recursive"
+
         return {
             "max_rule_length": self.max_rule_length,
             "min_confidence": self.min_confidence,
@@ -106,7 +107,8 @@ class DecisionListBase:
         else:
             y_train_t = y_train.copy()
 
-        self.n_classes = np.unique(y_train).size
+        self.classes_ = np.unique(y_train).tolist()
+        self.n_classes = len(self.classes_)
 
         return y_train_t.astype(float)
 
@@ -163,7 +165,7 @@ class DecisionListClassifier(DecisionListBase):
                 max_depth=self.max_rule_length,
                 n_estimators=self.num_trees,
                 max_features=self.max_features_per_split,
-                bootstrap=True,
+                bootstrap=False,
             )
 
             rf.fit(X_train_remaining, y_train_remaining)
@@ -175,6 +177,11 @@ class DecisionListClassifier(DecisionListBase):
                 min_support=self._min_support_n,
                 concise=True,
             )
+            
+            #if classes are missing in multi-class repair rules
+            forest_rules = add_missing_classes(forest_rules, 
+                                               self.classes_, 
+                                               rf.classes_)
 
             if len(forest_rules) == 0:
                 # if no rule was found
