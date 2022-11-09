@@ -336,15 +336,23 @@ def sort_rules(rules, mode="classification"):
         # classification
 
         # sort by confidence, support and rule length
-        sorted_idx = rule_array[
-            np.lexsort((rule_array[:, 1], rule_array[:, 2], -rule_array[:, 3]))[::-1]
-        ][:, 0].astype(int)
+        sorted_idx = np.lexsort(
+            (
+                rule_array[:, 3],
+                -rule_array[:, 2],
+                -rule_array[:, 1],
+            )
+        ).astype(int)
     else:
 
-        # sort by support and rule length
-        sorted_idx = rule_array[
-            np.lexsort((-rule_array[:, 1], rule_array[:, 2], -rule_array[:, 3]))[::-1]
-        ][:, 0].astype(int)
+        # sort by rmse, support and rule length
+        sorted_idx = np.lexsort(
+            (
+                rule_array[:, 3],
+                -rule_array[:, 2],
+                rule_array[:, 1],
+            )
+        ).astype(int)
 
     return [rules[i] for i in sorted_idx]
 
