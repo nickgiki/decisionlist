@@ -18,20 +18,20 @@ results = []
 
 np.random.seed(1)
 
-for i in range(50):
+for i in range(100):
 
     X, y = make_regression(1000, n_features=10)
     X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.25)
 
     # fit the dl classifier
-    dlr = DecisionListRegressor()
+    dlr = DecisionListRegressor(max_rule_length=3)
     dlr.fit(X_train, y_train)
 
     # fit the regressor
-    dtr = DecisionTreeRegressor()
+    dtr = DecisionTreeRegressor(max_depth=3)
     dtr.fit(X_train, y_train)
 
     results += [dlr.score(X_test, y_test) / dtr.score(X_test, y_test) - 1]
 
 plt.hist(results)
-np.median(results)
+np.quantile(results,[0.025,0.5,0.975])

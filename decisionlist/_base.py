@@ -15,8 +15,33 @@ def is_numeric(vector: np.ndarray):
 
 
 def mine_tree_rules(tree, feature_names=None, class_names=None, sign_digits=3):
-    """copied and modified from:
+    """
+    Extracts rules from scikit-learn decision trees and returns a list of them.
+    inspired and modified from:
     https://mljar.com/blog/extract-rules-decision-tree/
+
+    Parameters
+    ----------
+    tree : DecisionTreeClassifier or DecisionTreeRegressor
+        A scikit-learn fitted tree.
+    feature_names : list, optional
+        The names of the features. The default is None.
+    class_names : list, optional
+        The names of the classes. The default is None.
+    sign_digits : int, optional
+        How many decimals to be displayes for numeric splits. The default is 3.
+
+    Returns
+    -------
+    rules : list
+        A list of rules (tuples). The first element is a tuple with elements
+        the conditions that lead to a leaf node. The second element is the 
+        predicted class (for classification) or predicted value (for regression).
+        For classification trees the third, fourth and fifth elements are class 
+        counts, confidence and support. For regression trees the third and 
+        fourth elements are MSE and support, respectively and there is no fifth
+        element.
+
     """
     tree_ = tree.tree_
 
